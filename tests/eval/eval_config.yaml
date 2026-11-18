@@ -1,0 +1,36 @@
+metrics_to_run:
+  - custom_response_quality
+  - threshold_policy_compliance
+
+thresholds:
+  custom_response_quality: 4
+  threshold_policy_compliance: 1.0
+
+custom_metrics:
+  # Local LLM-as-judge (see response_quality.py).
+  - name: custom_response_quality
+    custom_function_file: response_quality.py
+  # Deterministic policy check verifying < $100 auto-approval, >= $100 HITL pause, and invalid rejection.
+  - name: threshold_policy_compliance
+    custom_function: |
+      def evaluate(instance):
+          case_id = instance.get("eval_case_id", "")
+          resp_obj = instance.get("response") or {}
+          parts = resp_obj.get("parts") or []
+          text = " ".join(p.get("text", "") for p in parts if isinstance(p, dict)).lower()
+          trace_str = str(instance.get("agent_data") or "")
+
+          if case_id.startswith("auto_approve_"):
+              ok = "automatically approved" in text and "adk_request_input" not in trace_str
+              return {"score": 1.0 if ok else 0.0}
+          if case_id.startswith("hitl_"):
+              ok = (
+                  "flagged for human review" in text
+                  and "automatically approved" not in text
+                  and "adk_request_input" in trace_str
+              )
+              return {"score": 1.0 if ok else 0.0}
+          if case_id.startswith("reject_"):
+              ok = "could not be approved" in text and "automatically approved" not in text
+              return {"score": 1.0 if ok else 0.0}
+          return {"score": 1.0}
