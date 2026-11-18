@@ -71,6 +71,7 @@ jobs:
 
       - name: Deploy to Production (Agent Runtime)
         run: |
+          rm -f deployment_metadata.json
           uvx google-agents-cli@1.15.0 deploy \
             --project ${{ vars.PROD_PROJECT_ID }} \
             --region ${{ vars.REGION }} \
